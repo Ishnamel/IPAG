@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Symmetrical Pixel Art Generator</title>
+<style>
+  body {
+    background: #3b2f26;
+    color: #e0d5c1;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  #pixelArtSettings {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #4a3d34;
+    border-radius: 8px;
+    color: #e0d5c1;
+    max-width: 600px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  #pixelArtSettings h3 {
+    text-align: center;
+    margin-top: 0;
+  }
+  #pixelArtSettings > div {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  label {
+    flex: 1;
+    user-select: none;
+  }
+  input[type="range"], input[type="number"] {
+    flex: 2;
+  }
+  #batchCount {
+    width: 60px;
+  }
+  button {
+    background: #6b5848;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: #e0d5c1;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+  button:hover {
+    background: #896754;
+  }
+    #gallery {
+    max-width: 960px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(15, 1fr);
+    /* Remove fixed row height to prevent extra vertical space */
+    gap: 1px;
+    min-height: auto; /* Let height adapt */
+  }
+  .thumb {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #27201a;
+    box-shadow:
+      inset 0 0 12px rgba(255, 255, 255, 0.05),
+      0 4px 8px rgba(0, 0, 0, 0.5);
+    transition: border-color 0.3s ease;
+  }
+  .thumb:hover, .thumb:focus {
+    border-color: #e0d5c1;
+    outline: none;
+  }
+  .thumb img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  /* Fullscreen modal */
+  #modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(58, 45, 33, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 9999;
+  }
+  #modal.visible {
+    visibility: visible;
+    opacity: 1;
+  }
+  #modal img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border: 4px solid #e0d5c1;
+    border-radius: 8px;
+    box-shadow: 0 0 20px #896754;
+  }
+  #modalClose {
+    position: fixed;
+    top: 20px;
+    right: 25px;
+    font-size: 2em;
+    color: #e0d5c1;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="pixelArtSettings" aria-label="Pixel Art Settings">
+  <h3>Pixel Art Settings</h3>
+  <div>
+    <label for="pixelWidthSlider">Pixel Width:</label>
+    <input id="pixelWidthSlider" type="range" min="5" max="20" value="8" />
+    <span id="pixelWidthValue" aria-live="polite" aria-atomic="true">20</span>
+  </div>
+  <div>
+    <label for="pixelHeightSlider">Pixel Height:</label>
+    <input id="pixelHeightSlider" type="range" min="5" max="20" value="8" />
+    <span id="pixelHeightValue" aria-live="polite" aria-atomic="true">20</span>
+  </div>
+  <div>
+    <label for="pixelSizeSlider">Pixel Size (px):</label>
+    <input id="pixelSizeSlider" type="range" min="5" max="50" value="20" />
+    <span id="pixelSizeValue" aria-live="polite" aria-atomic="true">20</span>
+  </div>
+  <div>
+    <label for="colorCountSlider">Number of Colors (Excluding Black):</label>
+    <input id="colorCountSlider" type="range" min="1" max="10" value="3" />
+    <span id="colorCountValue" aria-live="polite" aria-atomic="true">3</span>
+  </div>
+  <div>
+    <label for="blackRatio">Black Ratio:</label>
+    <input type="range" id="blackRatio" min="0" max="1" step="0.01" value="0.2" />
+    <span id="blackRatioValue" aria-live="polite" aria-atomic="true">0.20</span>
+  </div>
+  <div>
+    <label for="batchCountInput">Batch Count (1-100):</label>
+    <input id="batchCountInput" type="number" min="1" max="1000" step="1" value="15" />
+  </div>
+  <div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+    <button id="toggleCAMode" aria-pressed="false">CA Mode: OFF</button>
+    <button id="toggleGradientMode" aria-pressed="false">Gradient Mode: OFF</button>
+    <button id="generateBatchButton" style="flex:1 1 100%;">Generate Batch</button>
+  </div>
+</div>
+
+<div id="gallery" aria-label="Pixel Art Gallery"></div>
+
+<!-- Modal for zoom -->
+<div id="modal" role="dialog" aria-modal="true" aria-label="Zoomed Pixel Art">
+  <button id="modalClose" aria-label="Close Zoom">&times;</button>
+  <img src="" alt="Zoomed pixel art"/>
+</div>
+
+<script>
+// === Mode Toggles ===
+let useCAMode = false;
+let useGradientMode = false;
+
+// === Black Ratio ===
+let blackRatio = 0.2;
+const blackSlider = document.getElementById("blackRatio");
+const blackDisplay = document.getElementById("blackRatioValue");
+
+blackSlider.addEventListener("input", function () {
+  blackRatio = parseFloat(this.value);
+  blackDisplay.textContent = blackRatio.toFixed(2);
+});
+
+// Update slider values display
+function updateSliderDisplay(sliderId, displayId) {
+  const slider = document.getElementById(sliderId);
+  const display = document.getElementById(displayId);
+  display.textContent = slider.value;
+  slider.addEventListener("input", () => {
+    display.textContent = slider.value;
+  });
+}
+updateSliderDisplay('pixelWidthSlider', 'pixelWidthValue');
+updateSliderDisplay('pixelHeightSlider', 'pixelHeightValue');
+updateSliderDisplay('pixelSizeSlider', 'pixelSizeValue');
+updateSliderDisplay('colorCountSlider', 'colorCountValue');
+
+// Mode toggle buttons
+const caBtn = document.getElementById("toggleCAMode");
+const gradBtn = document.getElementById("toggleGradientMode");
+
+caBtn.addEventListener("click", function () {
+  useCAMode = !useCAMode;
+  if (useCAMode) {
+    useGradientMode = false;
+  }
+  this.textContent = "CA Mode: " + (useCAMode ? "ON" : "OFF");
+  this.setAttribute('aria-pressed', useCAMode);
+  gradBtn.textContent = "Gradient Mode: OFF";
+  gradBtn.setAttribute('aria-pressed', false);
+});
+
+gradBtn.addEventListener("click", function () {
+  useGradientMode = !useGradientMode;
+  if (useGradientMode) {
+    useCAMode = false;
+  }
+  this.textContent = "Gradient Mode: " + (useGradientMode ? "ON" : "OFF");
+  this.setAttribute('aria-pressed', useGradientMode);
+  caBtn.textContent = "CA Mode: OFF";
+  caBtn.setAttribute('aria-pressed', false);
+});
+
+// === Seeded Random Generator ===
+function seededRandom(seed) {
+  let x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+function getRandomColor(seed, index) {
+  const seededValue = seededRandom(seed + index);
+  const hue = Math.floor(seededValue * 360);
+  const saturation = 70 + Math.floor(seededRandom(seed + index + 1) * 30);
+  const lightness = 50 + Math.floor(seededRandom(seed + index + 2) * 20);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+// === Cellular Automata Functions ===
+function generateCASeedGrid(width, height, fillChance = 0.4, seed = 1) {
+  const grid = [];
+  for (let y = 0; y < height; y++) {
+    grid[y] = [];
+    for (let x = 0; x < width; x++) {
+      const value = seededRandom(seed + x * 17 + y * 31) < fillChance ? 1 : 0;
+      grid[y][x] = value;
+    }
+  }
+  return grid;
+}
+
+function smoothCA(grid, iterations = 4) {
+  const height = grid.length;
+  const width = grid[0].length;
+  let newGrid = JSON.parse(JSON.stringify(grid));
+
+  for (let i = 0; i < iterations; i++) {
+    const tempGrid = JSON.parse(JSON.stringify(newGrid));
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let wallCount = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const ny = y + dy;
+            const nx = x + dx;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height || newGrid[ny][nx]) {
+              wallCount++;
+            }
+          }
+        }
+        tempGrid[y][x] = wallCount >= 5 ? 1 : 0;
+      }
+    }
+    newGrid = tempGrid;
+  }
+  return newGrid;
+}
+
+function renderCAtoCanvas(grid, ctx, pixelSize, colors) {
+  for (let y = 0; y < grid.length; y++) {
+    for (let x = 0; x < grid[0].length; x++) {
+      const useBlack = seededRandom(x + y) < blackRatio;
+      const colorIndex = useBlack
+        ? colors.length - 1
+        : Math.floor(seededRandom(x + y) * (colors.length - 1));
+      ctx.fillStyle = colors[colorIndex];
+      ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+    }
+  }
+}
+
+// === Gradient Generator ===
+function generateGradientPixelArt(seed, pixelWidth, pixelHeight, pixelSize, colorCount) {
+  const canvas = document.createElement("canvas");
+  canvas.width = pixelWidth * pixelSize;
+  canvas.height = pixelHeight * pixelSize;
+  const ctx = canvas.getContext("2d");
+
+  const colors = [];
+  for (let i = 0; i < colorCount; i++) {
+    colors.push(getRandomColor(seed, i + 1));
+  }
+  const blackColor = "black";
+  colors.push(blackColor);
+
+  ctx.fillStyle = blackColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const halfWidth = Math.ceil(pixelWidth / 2);
+  const halfHeight = Math.ceil(pixelHeight / 2);
+  const centerX = (pixelWidth - 1) / 2;
+  const centerY = (pixelHeight - 1) / 2;
+  const maxDist = Math.sqrt(centerX * centerX + centerY * centerY);
+
+  function drawAndMirror(x, y, color) {
+    const px = x * pixelSize;
+    const py = y * pixelSize;
+    ctx.fillStyle = color;
+    ctx.fillRect(px, py, pixelSize, pixelSize);
+    ctx.fillRect((pixelWidth - x - 1) * pixelSize, py, pixelSize, pixelSize);
+    ctx.fillRect(px, (pixelHeight - y - 1) * pixelSize, pixelSize, pixelSize);
+    ctx.fillRect((pixelWidth - x - 1) * pixelSize, (pixelHeight - y - 1) * pixelSize, pixelSize, pixelSize);
+  }
+
+  for (let y = 0; y < halfHeight; y++) {
+    for (let x = 0; x < halfWidth; x++) {
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const gradient = 1 - dist / maxDist;
+
+      if (seededRandom(seed + x + y * pixelWidth) < gradient) {
+        const useBlack = seededRandom(seed + x + y * 999) < blackRatio;
+        const colorIndex = useBlack ? colors.length - 1 : Math.floor(gradient * (colors.length - 1));
+        drawAndMirror(x, y, colors[colorIndex]);
+      }
+    }
+  }
+
+  return canvas.toDataURL();
+}
+
+// === Perlin Noise Implementation ===
+// Minimal perlin noise implementation for demo (without external library)
+function perlinNoise(x, y) {
+  // Simplex or Perlin noise can be implemented fully here,
+  // but for simplicity, we'll simulate noise with seededMath:
+  return seededRandom(x * 374761393 + y * 668265263) * 2 - 1;
+}
+
+function getPerlinNoise(x, y) {
+  return perlinNoise(x / 10, y / 10);
+}
+
+// === Main Generator Function ===
+function generateSymmetricalPixelArt(seed, pixelWidth, pixelHeight, pixelSize, colorCount) {
+  if (useGradientMode) {
+    return generateGradientPixelArt(seed, pixelWidth, pixelHeight, pixelSize, colorCount);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = pixelWidth * pixelSize;
+  canvas.height = pixelHeight * pixelSize;
+  const ctx = canvas.getContext("2d");
+
+  const colors = [];
+  for (let i = 0; i < colorCount; i++) {
+    colors.push(getRandomColor(seed, i + 1));
+  }
+  const blackColor = "black";
+  colors.push(blackColor);
+
+  if (useCAMode) {
+    const rawGrid = generateCASeedGrid(pixelWidth, pixelHeight, 0.42, seed);
+    const smoothGrid = smoothCA(rawGrid, 4);
+    renderCAtoCanvas(smoothGrid, ctx, pixelSize, colors);
+  } else {
+    const mirroringType = Math.floor(seededRandom(seed) * 2) + 1;
+
+    for (let y = 0; y < pixelHeight; y++) {
+      for (let x = 0; x < pixelWidth; x++) {
+        if (x === 0 || y === 0 || x === pixelWidth - 1 || y === pixelHeight - 1) {
+          ctx.fillStyle = blackColor;
+          ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+          if (mirroringType === 1) {
+            ctx.fillRect((pixelWidth - x - 1) * pixelSize, y * pixelSize, pixelSize, pixelSize);
+          }
+          if (mirroringType === 2) {
+            ctx.fillRect(x * pixelSize, (pixelHeight - y - 1) * pixelSize, pixelSize, pixelSize);
+            ctx.fillRect((pixelWidth - x - 1) * pixelSize, (pixelHeight - y - 1) * pixelSize, pixelSize, pixelSize);
+          }
+          continue;
+        }
+
+        const seededValue = seededRandom(seed + y * pixelWidth + x);
+        const noiseValue = getPerlinNoise(x, y, seed);
+
+        const distFromCenterX = Math.abs((pixelWidth / 2) - x);
+        const distFromCenterY = Math.abs((pixelHeight / 2) - y);
+        const influenceType = Math.floor(seededRandom(seed + x + y) * 4);
+        let centerInfluence;
+
+        switch (influenceType) {
+          case 0:
+            const dist = Math.sqrt(distFromCenterX ** 2 + distFromCenterY ** 2);
+            const maxDist = Math.sqrt((pixelWidth / 2) ** 2 + (pixelHeight / 2) ** 2);
+            centerInfluence = 1 - dist / maxDist;
+            break;
+          case 1:
+            centerInfluence = Math.exp(-Math.sqrt(distFromCenterX ** 2 + distFromCenterY ** 2) * 0.1);
+            break;
+          case 2:
+            centerInfluence = 1 - (distFromCenterX + distFromCenterY) / ((pixelWidth / 2) + (pixelHeight / 2));
+            break;
+          case 3:
+            const logMaxDist = Math.sqrt((pixelWidth / 2) ** 2 + (pixelHeight / 2) ** 2);
+            centerInfluence = 1 - Math.log(Math.sqrt(distFromCenterX ** 2 + distFromCenterY ** 2) + 1) / Math.log(logMaxDist + 1);
+            break;
+          default:
+            centerInfluence = 1;
+        }
+
+        const adjustedSeedValue = seededValue + centerInfluence * 0.5 + noiseValue * 0.2;
+        const useBlack = seededRandom(x + y + seed) < blackRatio;
+        const colorIndex = useBlack ? colors.length - 1 : Math.floor(adjustedSeedValue * colors.length);
+        const safeIndex = Math.min(colorIndex, colors.length - 1);
+
+        ctx.fillStyle = colors[safeIndex];
+        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+
+        if (mirroringType === 1 || mirroringType === 2) {
+          ctx.fillRect((pixelWidth - x - 1) * pixelSize, y * pixelSize, pixelSize, pixelSize);
+        }
+        if (mirroringType === 2) {
+          ctx.fillRect(x * pixelSize, (pixelHeight - y - 1) * pixelSize, pixelSize, pixelSize);
+          ctx.fillRect((pixelWidth - x - 1) * pixelSize, (pixelHeight - y - 1) * pixelSize, pixelSize, pixelSize);
+        }
+      }
+    }
+  }
+
+  return canvas.toDataURL();
+}
+
+// === Batch Generation & Gallery Rendering ===
+const gallery = document.getElementById("gallery");
+const generateBatchButton = document.getElementById("generateBatchButton");
+
+generateBatchButton.addEventListener("click", () => {
+  const batchCountInput = document.getElementById("batchCountInput");
+  let batchCount = parseInt(batchCountInput.value);
+  if (isNaN(batchCount) || batchCount < 1) batchCount = 1;
+  else if (batchCount > 1000) batchCount = 1000;
+
+  // Clear existing gallery
+  gallery.innerHTML = '';
+
+  const pixelWidth = parseInt(document.getElementById("pixelWidthSlider").value);
+  const pixelHeight = parseInt(document.getElementById("pixelHeightSlider").value);
+  const pixelSize = parseInt(document.getElementById("pixelSizeSlider").value);
+  const colorCount = parseInt(document.getElementById("colorCountSlider").value);
+
+  for (let i = 0; i < batchCount; i++) {
+    const seed = Date.now() + i * 9999;
+    const dataUrl = generateSymmetricalPixelArt(seed, pixelWidth, pixelHeight, pixelSize, colorCount);
+    const thumbDiv = document.createElement('div');
+    thumbDiv.className = 'thumb';
+    thumbDiv.tabIndex = 0;
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = `Pixel art thumbnail #${i + 1}`;
+    thumbDiv.appendChild(img);
+
+    // Accessibility: open modal on keyboard enter or click
+    thumbDiv.addEventListener("click", () => openModal(dataUrl));
+    thumbDiv.addEventListener("keypress", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        openModal(dataUrl);
+      }
+    });
+
+    gallery.appendChild(thumbDiv);
+  }
+});
+
+// === Modal Zoom In ===
+const modal = document.getElementById("modal");
+const modalImg = modal.querySelector("img");
+const modalCloseBtn = document.getElementById("modalClose");
+
+function openModal(imgSrc) {
+  modalImg.src = imgSrc;
+  modal.classList.add("visible");
+  modalCloseBtn.focus();
+}
+
+function closeModal() {
+  modal.classList.remove("visible");
+  modalImg.src = "";
+}
+
+// Close modal on close button click
+modalCloseBtn.addEventListener("click", closeModal);
+
+// Close modal on outside click
+modal.addEventListener("click", (event) => {
+  if (event.target === modal) {
+    closeModal();
+  }
+});
+
+// Close modal on ESC press
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && modal.classList.contains("visible")) {
+    closeModal();
+  }
+});
+
+// Automatically generate initial batch on page load
+window.addEventListener("load", () => {
+  generateBatchButton.click();
+});
+
+</script>
+
+</body>
+</html>
+
